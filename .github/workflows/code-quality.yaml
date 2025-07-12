@@ -1,0 +1,64 @@
+name: Code Quality and Style Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run ESLint
+      run: npm run lint
+      
+    - name: Check TypeScript compilation
+      run: npx tsc --noEmit
+      
+    - name: Run tests (if available)
+      run: |
+        if npm run test --dry-run 2>/dev/null; then
+          npm run test -- --run
+        else
+          echo "No test script found, skipping tests"
+        fi
+      continue-on-error: true
+      
+    - name: Build project
+      run: npm run build
+      
+    - name: Check for unused dependencies
+      run: |
+        npx depcheck --ignores="@types/*,eslint-*,@eslint/*,typescript-eslint,@vitejs/*,vite,autoprefixer,postcss,tailwindcss"
+      continue-on-error: true
+      
+    - name: Security audit
+      run: npm audit --audit-level=moderate
+      continue-on-error: true
+      
+    - name: Bundle size check
+      run: |
+        npm run build
+        echo "Build completed successfully"
+        if [ -d "dist" ]; then
+          echo "Bundle size analysis:"
+          du -sh dist/*
+        fi
